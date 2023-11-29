@@ -26,7 +26,7 @@ Last update Nov 2023
 
 # Preface
 
-This step-by-step tutorial is a supplement to our paper submitted to [Nature Ecology and Evolution](https://www.nature.com/natecolevol/).
+This step-by-step tutorial is a supplement to our paper targeted at measuring biological generality via meta-analytic heterogeneity.
 
 
 ## Citation
@@ -115,9 +115,7 @@ source(here("function","custom_function.R"))
 
 # Load data and pre-process
 
-First we load the dataset provided by Risely et al. (2008) @risely2018migratory, who meta-analysed  41 studies examining how both infection status and infection intensity were related to changes in body stores, refuelling rates, movement capacity, phenology and survival in migratory hosts across taxa.
-
-For simplicity, we will only use the subset measuring infection status to show the illustration.
+Hodkinson and colleagues  conducted a network meta-analysis to assess the efficacy of different self-management interventions (multidisciplinary case management, regularly supported self-management, and minimally supported self-management) in enhancing the quality of life among asthma patients.
 
 ```{r data, warning=FALSE, echo = T}
 #load data

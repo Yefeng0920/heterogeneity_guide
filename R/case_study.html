@@ -4545,9 +4545,8 @@ Malgorzata Lagisz, Shinichi Nakagawa</p>
 </div>
 <div id="preface" class="section level1">
 <h1>Preface</h1>
-<p>This step-by-step tutorial is a supplement to our paper submitted to
-<a href="https://www.nature.com/natecolevol/">Nature Ecology and
-Evolution</a>.</p>
+<p>This step-by-step tutorial is a supplement to our paper targeted at
+measuring biological generality via meta-analytic heterogeneity.</p>
 <div id="citation" class="section level2">
 <h2>Citation</h2>
 <p>If our paper and tutorial have helped you, please cite the following
@@ -4633,12 +4632,11 @@ source code into the console, and hit “Enter” to let <code>R</code>
 </div>
 <div id="load-data-and-pre-process" class="section level1">
 <h1>Load data and pre-process</h1>
-<p>First we load the dataset provided by Risely et al. (2008)<span class="citation"><sup><a href="#ref-risely2018migratory" role="doc-biblioref">1</a></sup></span>, who meta-analysed 41 studies
-examining how both infection status and infection intensity were related
-to changes in body stores, refuelling rates, movement capacity,
-phenology and survival in migratory hosts across taxa.</p>
-<p>For simplicity, we will only use the subset measuring infection
-status to show the illustration.</p>
+<p>Hodkinson and colleagues conducted a network meta-analysis to assess
+the efficacy of different self-management interventions
+(multidisciplinary case management, regularly supported self-management,
+and minimally supported self-management) in enhancing the quality of
+life among asthma patients.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">#load data</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>dat_Risely <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">here</span>(<span class="st">&quot;data&quot;</span>,<span class="st">&quot;Risely_2018_data.csv&quot;</span>))</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -4734,15 +4732,15 @@ Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&
 <h1>Heterogeneity quantification and stratification</h1>
 <p>We quantify and stratify the heterogeneity using the formulas
 provided in the main text. All functions used are integrated into
-<code>orchard</code> package<span class="citation"><sup><a href="#ref-nakagawa2021orchard" role="doc-biblioref">2</a></sup></span>.</p>
+<code>orchard</code> package<span class="citation"><sup><a href="#ref-nakagawa2021orchard" role="doc-biblioref">1</a></sup></span>.</p>
 <p><strong>Typical sampling variance (which captures the statistical
 noise of the data, but is rarely reported in the current meta-analytic
 practice): </strong></p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sigma2_v</span>(mod_status)</span></code></pre></div>
 <pre><code>[1] 0.00131211</code></pre>
 <p><strong>Unstandardised heterogeneity metrics <span class="math inline">\(\sigma^2\)</span>:</strong></p>
-<div id="htmlwidget-e34a9117b4ebdcc23b0f" style="width:100%;height:auto;" class="datatables html-widget"></div>
-<script type="application/json" data-for="htmlwidget-e34a9117b4ebdcc23b0f">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[0.037,0.007,0,0.001,0.03]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>sigma2<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div id="htmlwidget-9ed0b4745dad18ef64a3" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-9ed0b4745dad18ef64a3">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[0.037,0.007,0,0.001,0.03]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>sigma2<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 <p><strong>Variance-standardised heterogeneity metrics <span class="math inline">\(I^2\)</span>:</strong></p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>t3 <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">stratum =</span> <span class="fu">c</span>(<span class="st">&quot;total&quot;</span>, mod_status<span class="sc">$</span>s.names),</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>           <span class="at">I2 =</span> <span class="fu">i2_ml</span>(mod_status)) <span class="sc">%&gt;%</span> <span class="fu">dfround</span>(<span class="dv">1</span>)</span>
@@ -4751,8 +4749,8 @@ practice): </strong></p>
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(t3) <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
 <span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>t3 <span class="sc">%&gt;%</span> DT<span class="sc">::</span><span class="fu">datatable</span>()</span></code></pre></div>
-<div id="htmlwidget-d641f6a30a87c119cc4f" style="width:100%;height:auto;" class="datatables html-widget"></div>
-<script type="application/json" data-for="htmlwidget-d641f6a30a87c119cc4f">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[96.6,18.5,0,1.5,76.6]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>I2<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div id="htmlwidget-2c400ddc624d330948ed" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-2c400ddc624d330948ed">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[96.6,18.5,0,1.5,76.6]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>I2<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 <p><strong>Mean-standardised heterogeneity metrics <span class="math inline">\(CV^2\)</span>:</strong></p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>t4 <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">stratum =</span> <span class="fu">c</span>(<span class="st">&quot;total&quot;</span>, mod_status<span class="sc">$</span>s.names),</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>           <span class="at">CV =</span> <span class="fu">cv_ml</span>(mod_status)) <span class="sc">%&gt;%</span> <span class="fu">dfround</span>(<span class="dv">1</span>)</span>
@@ -4761,8 +4759,8 @@ practice): </strong></p>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(t4) <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
 <span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>t4 <span class="sc">%&gt;%</span> DT<span class="sc">::</span><span class="fu">datatable</span>()</span></code></pre></div>
-<div id="htmlwidget-c44cac5d98fe5656db07" style="width:100%;height:auto;" class="datatables html-widget"></div>
-<script type="application/json" data-for="htmlwidget-c44cac5d98fe5656db07">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[0.9,0.4,0,0.1,0.8]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>CV<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div id="htmlwidget-6ac032dd79c875eb685d" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-6ac032dd79c875eb685d">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[0.9,0.4,0,0.1,0.8]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>CV<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 <p><strong>Mean-standardised heterogeneity metrics <span class="math inline">\(CV^2\)</span>:</strong></p>
 <div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>t5 <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">stratum =</span> <span class="fu">c</span>(<span class="st">&quot;total&quot;</span>, mod_status<span class="sc">$</span>s.names),</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>           <span class="at">M1 =</span> <span class="fu">m1_ml</span>(mod_status)) <span class="sc">%&gt;%</span> <span class="fu">dfround</span>(<span class="dv">1</span>)</span>
@@ -4771,8 +4769,8 @@ practice): </strong></p>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(t5) <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
 <span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>t5 <span class="sc">%&gt;%</span> DT<span class="sc">::</span><span class="fu">datatable</span>()</span></code></pre></div>
-<div id="htmlwidget-fec201ab91f77add1bd6" style="width:100%;height:auto;" class="datatables html-widget"></div>
-<script type="application/json" data-for="htmlwidget-fec201ab91f77add1bd6">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[0.4,0.2,0,0,0.3]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>M1<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div id="htmlwidget-b8bdc57007bf3500a345" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-b8bdc57007bf3500a345">{"x":{"filter":"none","vertical":false,"data":[["1","2","3","4","5"],["total","within-study","between-study","species","phylogeny"],[0.4,0.2,0,0,0.3]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>stratum<\/th>\n      <th>M1<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 <p><strong>Let’s visualize all heterogeneity measures:</strong></p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Visualize heterogeneity</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="do">## make dataframe</span></span>
@@ -5056,14 +5054,8 @@ _LC_TIME=Chinese (Simplified)<em>China.936</em></p>
 <div id="references" class="section level1 unnumbered">
 <h1 class="unnumbered">References</h1>
 <div id="refs" class="references csl-bib-body" line-spacing="2">
-<div id="ref-risely2018migratory" class="csl-entry">
-<div class="csl-left-margin">1. </div><div class="csl-right-inline">Risely, A., Klaassen, M. &amp; Hoye, B. J.
-Migratory animals feel the cost of getting sick: A meta-analysis across
-species. <em>Journal of Animal Ecology</em> <strong>87</strong>, 301–314
-(2018).</div>
-</div>
 <div id="ref-nakagawa2021orchard" class="csl-entry">
-<div class="csl-left-margin">2. </div><div class="csl-right-inline">Nakagawa, S. <em>et al.</em> The orchard plot:
+<div class="csl-left-margin">1. </div><div class="csl-right-inline">Nakagawa, S. <em>et al.</em> The orchard plot:
 Cultivating a forest plot for use in ecology, evolution, and beyond.
 <em>Research Synthesis Methods</em> <strong>12</strong>, 4–12
 (2021).</div>
