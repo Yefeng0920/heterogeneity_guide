@@ -26,7 +26,7 @@ The `function` folder includes the custom R function used to generate the sample
 
 ### `R` folder
 
-The `R` folder includes the R scripts used to reproduce all figures shown in the main text. The scripts are formatted both in Rmarkdown (`case_study.Rmd`) and html (`case_study.html`).
+The `R` folder includes the R scripts used to reproduce all figures shown in the main text. The scripts are formatted both in Rmarkdown (`case_study_updated_V2.Rmd`) and html (`case_study_updated_V2.html`).
 
 ## Licence
 
