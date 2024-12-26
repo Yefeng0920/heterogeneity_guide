@@ -1,0 +1,718 @@
+---
+title: "A pluralistic framework for measuring, interpreting and stratifying heterogeneity in meta-analysis"
+subtitle: "A step-by-step illustration"
+author: "anonymized"
+date: "last update December 2024"
+output:
+  rmdformats::robobook:
+    code_folding: hide
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+pkgdown:
+  as_is: true  
+bibliography: "references.bib"
+csl: "nature.csl"
+link-citations: yes  
+---
+
+
+# Update
+
+Last update December 2024
+
+# Preface
+
+This step-by-step tutorial is a supplement to our paper targeted at quantifying and interpreting heterogeneity in meta-analyses.
+
+```{r global options, include=FALSE}
+library(knitr)
+library(rmdformats)
+## global options
+# options(max.print = "75")
+knitr::opts_chunk$set(
+  echo = FALSE, cache = FALSE, prompt = FALSE,
+  tidy = FALSE, comment = NA,
+  message = FALSE, warning = FALSE
+)
+opts_knit$set(width = 75)
+
+```
+
+# Set-up 
+
+Our illustrations use R statistical software and existing R packages, which you will first need to download and install.
+
+If you do not have it on your machine, first install `R` ([download](https://cran.r-project.org/)). We recommend also downloading `RStudio`, a popular integrated development environment for coding with `R`, created by a company named posit ([download](https://posit.co/products/open-source/rstudio/)). 
+
+After installing `R`, you must install several packages that contain necessary functions for performing the analyses in this tutorial. If the packages are archived in CRAN, use `install.packages()` to install them. For example, to install the `metafor` package (a common meta-analysis package), you can execute `install.packages("metafor")` in the console (bottom left pane of `R Studio`). To install packages that are not on CRAN and archived in Github repositories, execute `devtools::install_github()`. For example, to install `orchaRd` (a meta-analysis visualization package) from Github repository, execute `devtools::install_github("daniel1noble/orchaRd", force = TRUE)`.
+
+The package list is as follows:
+
+```{r load packages, cache = FALSE, echo=T}
+# Install and load necessary library
+pacman::p_load(tidyverse, 
+               here,
+               DT,
+               janitor,
+               ggpubr,
+               readxl, 
+               metafor,
+               ggplot2,
+               ggsignif,
+               visdat,
+               cowplot,
+               patchwork,
+               pander,
+               rotl,
+               ape,
+               ggstance,
+               ggtree,
+               RColorBrewer,
+               wesanderson
+               )
+
+```
+
+# Custom function
+
+We provide helper functions necessary for our illustrations. To use them, you need to `source` them. You also can paste the source code into the console, and hit "Enter" to let `R` "learn" these custom functions.
+
+```{r function, echo = T}
+source(here("function","custom_function.R"))
+```
+
+
+# Case study 1
+
+## Load data
+
+Risely et al. (2018) quantitatively reviewed 85 observations extracted from 41 studies examining the relationship between infection status and intensity of infection and changes in body stores, refuelling rates, movement capacity, phenology and survival  of migratory hosts in different taxa @risely2018migratory.
+
+```{r data, warning=FALSE, echo = T}
+#load data
+dat_Risely <- read.csv(here("data","Risely_2018_data.csv"))
+
+#subset observations on infection status
+status <- subset(dat_Risely, infection.measure=="Infection status") ##subset observations on infection status
+
+#t1 <- status %>% DT::datatable()
+```
+
+We also construct the phylogenetic tree to allow for decomposing heterogeneity at both species and phylogeny levels.
+
+```{r tree, warning=FALSE, echo = T}
+#check species we have
+#length(unique(status$species_latin)) #25 unique species names, if no misspelling
+
+#find Open Tree Taxonomy (OTT) IDs for each species
+taxa <- tnrs_match_names(names = unique(status$species_latin))
+
+#rough check
+#length(taxa$unique_name) # 25 unique species names, which is aligned with the species names in the dataset
+#tabyl(taxa,approximate_match) # 0 approximate match
+
+#check whether all otts occur in the synthetic tree
+ott_in_tree <- ott_id(taxa)[is_in_tree(ott_id(taxa))]  # all good
+#length(ott_in_tree) # 25
+
+#make phylo tree
+tree <- tol_induced_subtree(ott_ids = ott_id(taxa))
+
+tree$tip.label <- strip_ott_ids(tree$tip.label, remove_underscores = TRUE)
+
+# test whether a tree is binary
+#is.binary(tree)  
+
+#decapitalise species names to match with the search string names in taxa
+status <- status %>% mutate(search_string = tolower(species_latin))  
+
+#align data
+status <- left_join(status, dplyr::select(taxa, search_string, unique_name, ott_id), by = "search_string")  
+
+#create the variables of spp and phylo
+status <- status %>% mutate(spp = search_string, phylo = unique_name)
+
+
+#estimate branch lengths using APE
+tree2 <- compute.brlen(tree, method = "Grafen", power = 1)
+##create correlation matrix
+phylo_corr <- vcv(tree2, corr=TRUE)
+plot(tree2, cex = .8, label.offset = .1, no.margin = TRUE)
+```
+
+
+## Fit data
+
+We fit a phylogenetic multilevel model as illustrated in the main text to the data. Doing so, we can stratify the heterogeneity at different strata: within-study level (`obs_id`), between-study level (`study_id`), species level (`spp`), and phylogeny level (`phylo`).
+
+$$
+ES_{[i]} = \mu + u_{species[k]} + u_{phylogeny[k]} + \mu_{between[j]} + \mu_{within[j]} + e_{[i]}
+$$
+```{r model fit, echo = T, warning=FALSE}
+#unify the name of key variables
+dat <- status
+dat$obs_id <- 1:nrow(dat)
+dat$study_id <- dat$id
+# run the model
+mod_status <- rma.mv(g, var.g, random = list(~ 1 | obs_id, ~1 | study_id, ~ 1 | spp, ~ 1 | phylo), R = list(phylo = phylo_corr), data = dat)
+
+summary(mod_status)
+```
+
+## Heterogeneity quantification and stratification
+
+We quantify and stratify the heterogeneity using the formulas provided in the main text. All functions used are integrated into `orchard` package @nakagawa2021orchard.
+
+__Typical sampling variance (which captures the statistical noise of the data, but is rarely reported in the current meta-analytic practice): __
+
+```{r Vbar, echo = T, warning=FALSE}
+sigma2_v(mod_status)
+```
+
+__Unstandardised heterogeneity metrics $\sigma^2$:__ 
+
+```{r sigma2, warning=FALSE}
+t2 <- data.frame(stratum = c("total", mod_status$s.names),
+           sigma2 = c(sum(mod_status$sigma2), mod_status$sigma2)) %>% dfround(3)
+
+t2$stratum <- c("total", "within-study", "between-study", "species", "phylogeny")
+rownames(t2) <- NULL
+
+t2 %>% DT::datatable()
+```
+
+__Variance-standardised heterogeneity metrics $I^2$:__
+
+```{r I2, echo = T, warning=FALSE}
+t3 <- data.frame(stratum = c("total", mod_status$s.names),
+           I2 = i2_ml(mod_status) / 100) %>% dfround(1)
+
+t3$stratum <- c("total", "within-study", "between-study", "species", "phylogeny")
+rownames(t3) <- NULL
+
+t3 %>% DT::datatable()
+```
+
+__Mean-standardised heterogeneity metrics $CVH2$:__
+
+```{r CV, echo = T, warning=FALSE}
+t4 <- data.frame(stratum = c("total", mod_status$s.names),
+           CVH2 = cvh2_ml(mod_status)) %>% dfround(2)
+
+t4$stratum <- c("total", "within-study", "between-study", "species", "phylogeny")
+rownames(t4) <- NULL
+
+t4 %>% DT::datatable()
+```
+
+__Mean- and variance-standardised heterogeneity metrics $M2$:__
+
+```{r M, echo = T, warning=FALSE}
+t5 <- data.frame(stratum = c("total", mod_status$s.names),
+           M2 = m2_ml(mod_status)) %>% dfround(2)
+
+t5$stratum <- c("total", "within-study", "between-study", "species", "phylogeny")
+rownames(t5) <- NULL
+
+t5 %>% DT::datatable()
+```
+
+__Let's visualize all heterogeneity measures:__
+
+```{r visualization, echo = T, warning=FALSE}
+# Visualize heterogeneity
+## make dataframe
+h_status <- data.frame(sigma2 = t2$sigma2,
+                       I2 = i2_ml(mod_status),
+                       CVH = cvh2_ml(mod_status),
+                       M2 = m2_ml(mod_status))
+rownames(h_status) <- c("Total", "obs_id", "study_id", "spp", "phylo")
+h_status$levels <- rownames(h_status)
+h_status$levels <- dplyr::recode(h_status$levels, "Total" = "Total",  "obs_id" = "Within",  "study_id" = "Between", "spp" = "Spp", "phylo" = "Phylo")
+h_status$levels <- as.factor(h_status$levels)
+h_status$levels <- factor(h_status$levels, levels = c("Total", "Phylo", "Spp", "Between", "Within"))
+
+## plot
+## sigma
+p.sigma <- ggplot(h_status, aes(levels, sigma2)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[1], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[1]) +
+  labs(y = expression("Variance"), x = "Strata" , title = "Unstandardised heterogeneity metrics") + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        ) 
+
+# I2
+p.I2 <- ggplot(h_status, aes(levels, I2/100)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[2], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[2]) +
+  labs(y = expression(paste(italic(I)[]^2)), x = "Strata" , title = "Source of heterogeneity") + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        ) 
+
+# CVH
+p.CV <- ggplot(h_status, aes(levels, CVH)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[3], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[3]) +
+  labs(y = expression(paste(italic(CVH2)[])), x = "Strata" , title = "Magnitude of heterogeneity") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01)) + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        )   
+  
+
+# M
+p.M <- ggplot(h_status, aes(x = levels, y = M2)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[4], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[4]) +
+  labs(y = expression(paste(italic(M2)[])), x = "Strata" , title = "Magnitude of heterogeneity") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01)) + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        )  
+
+
+
+
+#png(filename = "Fig. 6.png", width = 9, height = 8, units = "in", type = "windows", res = 400)
+p.sigma + p.I2 + p.CV + p.M + plot_layout(ncol =2, nrow = 2) + plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
+```
+
+## Heterogeneity interpretation
+
+The best way to interpret heterogeneity is to place the interpretation of heterogeneity in the specific context of the research topic. When meta-analysts lack sufficient domain knowledge to implement this context-specific interpretation strategy, empirically derived benchmarks, which compare the heterogeneity of interest with published meta-analyses can provide a starting point for interpreting heterogeneity.
+
+We provide an R helper function (`het_interpret()`) that can help determine the percentile range in which the heterogeneity estimates for a particular meta-analysis fall, based on the heterogeneity distribution of the published meta-analysis.
+
+The main parameters of `het_interpret()` are as follows:
+
+`observed_value` Specify the observed value of heterogeneity.
+
+`het_type = "V_bar"` Specify the heterogeneity measures: `"I2"`, `"CVH"`, `"M"`, raw heterogeneity (`"sigma2"`), and typical sampling variance (`"V_bar"`).
+
+`es_type` Specify the effect size measures: standardised mean difference like Cohen's d (`"SMD"`), log response ratio (`"lnRR"`), Fisher’s r-to-z transformed correlation coefficient (`"Zr"`), 2-by-2 table denotes often dichotomous ("`binary`") effect size measures like log odds ratio, and uncommon measures (`"uncommon"`) represent less frequently used effect size measures like mean difference.
+
+`data`  Specify the dataset containing empirical benchmarks (i.e., the dataset `het.benchmark`),
+
+
+First, let's upload the benchmark data (`het.benchmark`), which are publicly available in the GitHub repository:
+
+```{r}
+# example usage
+# define the URL for the dataset containing empirical benchmarks
+dataset_url <- "https://raw.githubusercontent.com/Yefeng0920/heterogeneity_guide/main/benchmark/het.benchmark.csv"
+# download and read the dataset
+het.benchmark <- read.csv(dataset_url)
+```
+
+Then, we calculate the percentile range for each type of heterogeneity measure.
+
+__Percentile range of typical sampling variance: __
+
+```{r}
+het_interpret(
+  observed_value = sigma2_v(mod_status),
+  het_type = "V_bar",   
+  es_type = "Zr",
+  data = het.benchmark
+)
+```
+
+
+__Unstandardised heterogeneity metrics $\sigma^2$:__ 
+
+```{r}
+het_interpret(
+  observed_value = sum(mod_status$sigma2),
+  het_type = "sigma2",   
+  es_type = "Zr",
+  data = het.benchmark
+)
+```
+
+
+__Variance-standardised heterogeneity metrics $I^2$:__
+
+```{r}
+het_interpret(
+  observed_value = i2_ml(mod_status)[1] / 100, # rescale percentage to proportion
+  het_type = "I2",   
+  es_type = "Zr",
+  data = het.benchmark
+)
+```
+
+
+__Mean-standardised heterogeneity metrics $CVH2$:__
+
+```{r}
+het_interpret(
+  observed_value = cvh2_ml(mod_status)[1],
+  het_type = "CVH",   
+  es_type = "Zr",
+  data = het.benchmark
+)
+```
+
+__Mean- and variance-standardised heterogeneity metrics $M2$:__
+
+```{r}
+het_interpret(
+  observed_value = m2_ml(mod_status)[1],
+  het_type = "M",   
+  es_type = "Zr",
+  data = het.benchmark
+)
+```
+
+
+# Case study 2
+
+## Load data 
+
+Yang et al. (2024) conducted a meta-analysis on an evidence base including 437 effect sizes extracted from 127 experiments investigating the impact of artificial light at night on the melatonin suppression of wildlife @yang2024species.
+
+```{r data2, warning=FALSE, echo = T}
+#load data
+dat_Yang <- read.csv(here("data","Yang_2024_data.csv"))
+
+#effect size computation - use log response ratio as the effect size measure
+dat_Yang <- escalc(measure = "ROM", m1i = Exp_Mean, m2i = Con_Mean, sd1i = Exp_SD, sd2i = Con_SD, n1i = Exp_N, n2i = Con_N, data = dat_Yang)
+```
+
+
+## Fit data
+
+We fit a three-level multilevel model to the data. Doing so, we can stratify the heterogeneity at within-study level (`obs_id`), and between-study level (`study_id`).
+
+```{r model fit2, echo = T, warning=FALSE}
+#unify the name of key variables
+dat <- dat_Yang
+# add row no.
+dat$obs_id <- 1:nrow(dat)
+dat$study_id <- dat$StudyID
+# run the model
+mod_alan <- rma.mv(yi, vi, random = list(~ 1 | obs_id, ~1 | study_id), data = dat)
+
+summary(mod_alan)
+```
+
+## Heterogeneity quantification and stratification
+
+We quantify and stratify the heterogeneity using the formulas provided in the main text. All functions used are integrated into `orchard` package @nakagawa2021orchard.
+
+__Typical sampling variance (which captures the statistical noise of the data, but is rarely reported in the current meta-analytic practice): __
+
+```{r Vbar2, echo = T, warning=FALSE}
+sigma2_v(mod_alan)
+```
+
+__Unstandardised heterogeneity metrics $\sigma^2$:__ 
+
+```{r sigma22, warning=FALSE}
+t2 <- data.frame(stratum = c("total", mod_alan$s.names),
+           sigma2 = c(sum(mod_alan$sigma2), mod_alan$sigma2)) %>% dfround(3)
+
+t2$stratum <- c("total", "within-study", "between-study")
+rownames(t2) <- NULL
+
+t2 %>% DT::datatable()
+```
+
+__Variance-standardised heterogeneity metrics $I^2$:__
+
+```{r I22, echo = T, warning=FALSE}
+t3 <- data.frame(stratum = c("total", mod_alan$s.names),
+           I2 = i2_ml(mod_alan) / 100) %>% dfround(1)
+
+t3$stratum <- c("total", "within-study", "between-study")
+rownames(t3) <- NULL
+
+t3 %>% DT::datatable()
+```
+
+__Mean-standardised heterogeneity metrics $CVH2$:__
+
+```{r CV2, echo = T, warning=FALSE}
+t4 <- data.frame(stratum = c("total", mod_alan$s.names),
+           CVH2 = cvh2_ml(mod_alan)) %>% dfround(2)
+
+t4$stratum <- c("total", "within-study", "between-study")
+rownames(t4) <- NULL
+
+t4 %>% DT::datatable()
+```
+
+__Mean- and variance-standardised heterogeneity metrics $M2$:__
+
+```{r M2, echo = T, warning=FALSE}
+t5 <- data.frame(stratum = c("total", mod_alan$s.names),
+           M2 = m2_ml(mod_alan)) %>% dfround(2)
+
+t5$stratum <- c("total", "within-study", "between-study")
+rownames(t5) <- NULL
+
+t5 %>% DT::datatable()
+```
+
+__Let's visualize all heterogeneity measures:__
+
+```{r visualization2, echo = T, warning=FALSE}
+# Visualize heterogeneity
+## make dataframe
+h_status <- data.frame(sigma2 = t2$sigma2,
+                       I2 = i2_ml(mod_alan),
+                       CVH = cvh2_ml(mod_alan),
+                       M2 = m2_ml(mod_alan))
+rownames(h_status) <- c("Total", "obs_id", "study_id")
+h_status$levels <- rownames(h_status)
+h_status$levels <- dplyr::recode(h_status$levels, "Total" = "Total",  "obs_id" = "Within",  "study_id" = "Between")
+h_status$levels <- as.factor(h_status$levels)
+h_status$levels <- factor(h_status$levels, levels = c("Total", "Between", "Within"))
+
+## plot
+## sigma
+p.sigma <- ggplot(h_status, aes(levels, sigma2)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[1], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[1]) +
+  labs(y = expression("Variance"), x = "Strata" , title = "Unstandardised heterogeneity metrics") + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        ) 
+
+# I2
+p.I2 <- ggplot(h_status, aes(levels, I2/100)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[2], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[2]) +
+  labs(y = expression(paste(italic(I)[]^2)), x = "Strata" , title = "Source of heterogeneity") + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        ) 
+
+# CVH
+p.CV <- ggplot(h_status, aes(levels, CVH)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[3], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[3]) +
+  labs(y = expression(paste(italic(CVH2)[])), x = "Strata" , title = "Magnitude of heterogeneity") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01)) + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        )   
+  
+
+# M
+p.M <- ggplot(h_status, aes(x = levels, y = M2)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[4], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[4]) +
+  labs(y = expression(paste(italic(M2)[])), x = "Strata" , title = "Magnitude of heterogeneity") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01)) + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        )  
+
+
+
+p.sigma + p.I2 + p.CV + p.M + plot_layout(ncol =2, nrow = 2) + plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
+```
+
+## Heterogeneity interpretation
+
+We also illustrate the use of empirical benchmarks using the data from Yang et al. (2024) @yang2024species. 
+
+Upload the benchmark data (`het.benchmark`):
+
+```{r}
+# example usage
+# define the URL for the dataset containing empirical benchmarks
+dataset_url <- "https://raw.githubusercontent.com/Yefeng0920/heterogeneity_guide/main/benchmark/het.benchmark.csv"
+# download and read the dataset
+het.benchmark <- read.csv(dataset_url)
+```
+
+Calculate the percentile range for each type of heterogeneity measure.
+
+__Percentile range of typical sampling variance: __
+
+```{r}
+het_interpret(
+  observed_value = sigma2_v(mod_alan),
+  het_type = "V_bar",   
+  es_type = "lnRR",
+  data = het.benchmark
+)
+```
+
+
+__Unstandardised heterogeneity metrics $\sigma^2$:__ 
+
+```{r}
+het_interpret(
+  observed_value = sum(mod_alan$sigma2),
+  het_type = "sigma2",   
+  es_type = "lnRR",
+  data = het.benchmark
+)
+```
+
+
+__Variance-standardised heterogeneity metrics $I^2$:__
+
+```{r}
+het_interpret(
+  observed_value = i2_ml(mod_alan)[1] / 100, # rescale percentage to proportion
+  het_type = "I2",   
+  es_type = "lnRR",
+  data = het.benchmark
+)
+```
+
+
+__Mean-standardised heterogeneity metrics $CVH2$:__
+
+```{r}
+het_interpret(
+  observed_value = cvh2_ml(mod_alan)[1],
+  het_type = "CVH",   
+  es_type = "lnRR",
+  data = het.benchmark
+)
+```
+
+__Mean- and variance-standardised heterogeneity metrics $M2$:__
+
+```{r}
+het_interpret(
+  observed_value = m2_ml(mod_alan)[1],
+  het_type = "M",   
+  es_type = "lnRR",
+  data = het.benchmark
+)
+```
+
+## Additional illustration
+
+In addition, we show how the traditional heterogeneity measure $I^2$ can distort heterogeneity estimates for some specific effect size measures.
+
+Some meta-analysts may be interested in the difference in variability between two groups. The (log-transformed) ratio of the coefficients of variation of the two groups (also known as the coefficient of variation ratio) can be a useful metric for comparing the variability of the two groups. Due to the properties of the coefficient of variation ratio, it usually has a large sampling variance. This inherently large sampling variance leads to smaller $I^2$ values, regardless of whether the true heterogeneity is large or not.
+
+
+Let's use the example of Yang et al. (2024) @yang2024species to illustrate it.
+
+### Load data
+
+```{r data3, warning=FALSE, echo = T}
+#load data
+dat_Yang <- read.csv(here("data","Yang_2024_data.csv"))
+
+# calculate the coefficient of variation ratio for each observation
+dat_Yang <- escalc(measure = "CVR", m1i = Exp_Mean, m2i = Con_Mean, sd1i = Exp_SD, sd2i = Con_SD, n1i = Exp_N, n2i = Con_N, data = dat_Yang)
+```
+
+
+### Fit data
+
+Fit a three-level multilevel model and stratify the heterogeneity at within-study level (`obs_id`), and between-study level (`study_id`).
+
+```{r model fit3, echo = T, warning=FALSE}
+#unify the name of key variables
+dat <- dat_Yang
+# add row no.
+dat$obs_id <- 1:nrow(dat)
+dat$study_id <- dat$StudyID
+# run the model
+mod_alan <- rma.mv(yi, vi, random = list(~ 1 | obs_id, ~1 | study_id), data = dat)
+
+summary(mod_alan)
+```
+
+### Heterogeneity quantification and stratification
+
+Calculate heterogeneity for the meta-analysis using the coefficient of variation ratio. As you can see, the $I^2$ values become much smaller, while $\sigma^2$, $CVH2$, and $M2$ are still large.
+
+```{r visualization3, echo = T, warning=FALSE}
+# Visualize heterogeneity
+## make dataframe
+h_status <- data.frame(sigma2 = t2$sigma2,
+                       I2 = i2_ml(mod_alan) / 100,
+                       CVH = cvh2_ml(mod_alan),
+                       M2 = m2_ml(mod_alan))
+rownames(h_status) <- c("Total", "obs_id", "study_id")
+h_status$levels <- rownames(h_status)
+h_status$levels <- dplyr::recode(h_status$levels, "Total" = "Total",  "obs_id" = "Within",  "study_id" = "Between")
+h_status$levels <- as.factor(h_status$levels)
+h_status$levels <- factor(h_status$levels, levels = c("Total", "Between", "Within"))
+
+## plot
+## sigma
+p.sigma <- ggplot(h_status, aes(levels, sigma2)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[1], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[1]) +
+  labs(y = expression("Variance"), x = "Strata" , title = "Unstandardised heterogeneity metrics") + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        ) 
+
+# I2
+p.I2 <- ggplot(h_status, aes(levels, I2/100)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[2], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[2]) +
+  labs(y = expression(paste(italic(I)[]^2)), x = "Strata" , title = "Source of heterogeneity") + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        ) 
+
+# CVH
+p.CV <- ggplot(h_status, aes(levels, CVH)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[3], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[3]) +
+  labs(y = expression(paste(italic(CVH2)[])), x = "Strata" , title = "Magnitude of heterogeneity") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01)) + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        )   
+  
+
+# M
+p.M <- ggplot(h_status, aes(x = levels, y = M2)) +
+  geom_col(alpha = 1, color = wes_palette('GrandBudapest1', 4, type = 'discrete')[4], fill = wes_palette('GrandBudapest1', 4, type = 'discrete')[4]) +
+  labs(y = expression(paste(italic(M2)[])), x = "Strata" , title = "Magnitude of heterogeneity") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01)) + 
+  theme_bw() +
+  theme(legend.background = element_blank(),
+        axis.text = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black")
+        )  
+
+
+
+p.sigma + p.I2 + p.CV + p.M + plot_layout(ncol =2, nrow = 2) + plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
+```
+
+
+
+
+# License  
+
+This documented is licensed under the following license: [CC Attribution-Noncommercial-Share Alike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en).  
+
+# Software and package versions  
+
+```{r versions}
+# sessionInfo() %>% pander()
+subset(data.frame(sessioninfo::package_info()), attached==TRUE, c(package, loadedversion))
+```
+
+# References  
