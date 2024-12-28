@@ -12,6 +12,8 @@ The repository contains the following folders:
 
 - data
 
+- benchmark
+
 - function
 
 - R
@@ -19,6 +21,10 @@ The repository contains the following folders:
 ### `data` folder
 
 The `data` folder includes the raw data files used for the case study.
+
+### `benchmark` folder
+
+The `benchmark` folder includes the data that can determine the percentile range in which the heterogeneity estimates for a particular meta-analysis fall, based on the heterogeneity distribution of the published meta-analyses.
 
 ### `Function` folder
 
