@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a repository containing the data and code for the illustration of the case studies from
+This is a repository containing the data and code for the illustration of the case study from
 
 >  Anonymized. A pluralistic framework for measuring, interpreting and stratifying heterogeneity in meta-analysis. 2023.
 
