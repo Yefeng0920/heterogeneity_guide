@@ -1,4 +1,4 @@
-# A pluralistic framework for measuring, interpreting and stratifying heterogeneity in meta-analysis
+# A pluralistic framework for measuring, interpreting and decomposing heterogeneity in meta-analysis
 
 ## Overview
 
