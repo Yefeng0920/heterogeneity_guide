@@ -19,7 +19,7 @@ link-citations: yes
 
 # Update
 
-Last update December 2024
+Last update June 2025
 
 # Preface
 
@@ -50,7 +50,7 @@ After installing `R`, you must install several packages that contain necessary f
 The package list is as follows:
 
 ```{r load packages, cache = FALSE, echo=T}
-# Install and load necessary library
+# install and load necessary library
 pacman::p_load(tidyverse, 
                here,
                DT,
@@ -94,9 +94,8 @@ Risely et al. (2018) quantitatively reviewed 85 observations extracted from 41 s
 dat_Risely <- read.csv(here("data","Risely_2018_data.csv"))
 
 #subset observations on infection status
-status <- subset(dat_Risely, infection.measure=="Infection status") ##subset observations on infection status
-
-#t1 <- status %>% DT::datatable()
+status <- subset(dat_Risely, infection.measure=="Infection status")
+head(status)
 ```
 
 We also construct the phylogenetic tree to allow for decomposing heterogeneity at both species and phylogeny levels.
@@ -277,9 +276,6 @@ p.M <- ggplot(h_status, aes(x = levels, y = M2)) +
         axis.title = element_text(size = 12, color = "black")
         )  
 
-
-
-
 #png(filename = "Fig. 6.png", width = 9, height = 8, units = "in", type = "windows", res = 400)
 p.sigma + p.I2 + p.CV + p.M + plot_layout(ncol =2, nrow = 2) + plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
 ```
@@ -313,6 +309,9 @@ het.benchmark <- read.csv(dataset_url)
 
 Then, we calculate the percentile range for each type of heterogeneity measure.
 
+het_interpret(observed_value = 0.9, het_type = "CVH", es_type = "SMD", data = het.benchmark)
+
+
 __Percentile range of typical sampling variance: __
 
 ```{r}
@@ -322,6 +321,7 @@ het_interpret(
   es_type = "Zr",
   data = het.benchmark
 )
+
 ```
 
 
